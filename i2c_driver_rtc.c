@@ -24,8 +24,25 @@ static struct i2c_adapter *rtc_i2c_adapter = NULL;
 static struct i2c_client *rtc_i2c_client = NULL;
 
 
+static struct class *rtc_i2c_class;
+static struct device *rtc_device;
+static dev_t rtc_dev_num;
 
 
+static int rtc_read(struct device *dev, struct rtc_time *tm)
+{
+    return 0;
+}
+
+static int rtc_set(struct device *dev, struct rtc_time *tm)
+{
+    return 0;
+}
+
+static const struct rtc_class_ops rtc_ops = {
+    .read_time = rtc_read,
+    .set_time = rtc_set,
+};
 
 
 static int rtc_probe(struct i2c_client *client,const struct i2c_device_id *id)
@@ -67,9 +84,10 @@ static struct i2c_board_info rtc_i2c_board_info = {
 
 static int __init rtc_driver_init(void)
 {
-	int ret = -1;
+	int ret;
 	rtc_i2c_adapter = i2c_get_adapter(I2C_AVAILABLE);
 
+			pr_info("rtc_client registeres\n");
 	if(rtc_i2c_adapter!=NULL)
 	{
 		rtc_i2c_client = i2c_new_client_device(rtc_i2c_adapter,&rtc_i2c_board_info);
@@ -77,7 +95,6 @@ static int __init rtc_driver_init(void)
 		if(rtc_i2c_client!=NULL)
 		{
 			i2c_add_driver(&rtc_driver);
-			ret = 0;
 		}
 		i2c_put_adapter(rtc_i2c_adapter);
 	}
@@ -87,18 +104,58 @@ static int __init rtc_driver_init(void)
 	
 
 
+	ret = alloc_chrdev_region(&rtc_dev_num, 0, 1, "rtc_device");
+	if (ret < 0) {
+		pr_err("Failed to allocate device number: %d\n", ret);
+		goto err_unregister_driver;
+	}
+
+
+
+
+        rtc_i2c_class = class_create(THIS_MODULE, "rtc_class");
+        if (IS_ERR(rtc_i2c_class)) {
+                pr_err("Failed to create RTC class\n");
+                ret = PTR_ERR(rtc_i2c_class);
+                goto err_unregister_dev_num;
+        }
+	
+
+	// Create a device
+	rtc_device = device_create(rtc_i2c_class, NULL, rtc_dev_num, NULL, "rtc_device");
+	if (IS_ERR(rtc_device)) {
+		pr_err("Failed to create RTC device\n");
+	        ret = PTR_ERR(rtc_device);
+        	goto err_destroy_class;
+	}
+
 	pr_info("RTC device created\n");
 
-	return ret;
+	return 0;
 
+err_destroy_class:
+	class_destroy(rtc_i2c_class);
+
+
+err_unregister_dev_num:
+        unregister_chrdev_region(rtc_dev_num, 1);
+
+
+err_unregister_driver:
+	i2c_del_driver(&rtc_driver);
+
+	return ret;
 }
 
 
 
 static void __exit rtc_driver_exit(void)
 {
-	i2c_del_driver(&rtc_driver);
-	i2c_unregister_device(rtc_i2c_client);
+	device_destroy(rtc_i2c_class, rtc_dev_num);
+	class_destroy(rtc_i2c_class);
+	unregister_chrdev_region(rtc_dev_num, 1);
+//	i2c_del_driver(&rtc_driver);
+//	i2c_unregister_device(rtc_i2c_client);
 
 	pr_info("Driver removed\n");
 

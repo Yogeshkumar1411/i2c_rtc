@@ -85,11 +85,11 @@ static struct i2c_board_info rtc_i2c_board_info = {
 static int __init rtc_driver_init(void)
 {
 	int ret;
-	rtc_i2c_adapter = i2c_get_adapter(I2C_AVAILABLE);
+	rtc_i2c_adapter = i2c_get_adapter(0);
 
-			pr_info("rtc_client registeres\n");
 	if(rtc_i2c_adapter!=NULL)
 	{
+	pr_info("adapter pass\n");
 		rtc_i2c_client = i2c_new_client_device(rtc_i2c_adapter,&rtc_i2c_board_info);
 
 		if(rtc_i2c_client!=NULL)
@@ -154,8 +154,8 @@ static void __exit rtc_driver_exit(void)
 	device_destroy(rtc_i2c_class, rtc_dev_num);
 	class_destroy(rtc_i2c_class);
 	unregister_chrdev_region(rtc_dev_num, 1);
-//	i2c_del_driver(&rtc_driver);
-//	i2c_unregister_device(rtc_i2c_client);
+	i2c_del_driver(&rtc_driver);
+	i2c_unregister_device(rtc_i2c_client);
 
 	pr_info("Driver removed\n");
 
